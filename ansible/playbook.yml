@@ -1,0 +1,95 @@
+- hosts: nexus
+  become: yes
+  roles:
+    - pogosoftware.lvm
+    - pogosoftware.self_signed_cert
+    - pogosoftware.nexus3_oss
+  vars:
+    vgs:
+      - vg: data
+        pvs: /dev/sdb
+        lvs:
+          - lv: nexus
+            size: +100%VG
+            path: /var/lib/nexus
+
+    self_signed_cert_dir: /vagrant/certs/
+    self_signed_cert_ca_certs:
+      - name: akira-ca
+        cn: Akira CA
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
+        trust_ca_cert: true
+
+    self_signed_cert_certs:
+      - name: nexus-server.akira.internal
+        profile: server
+        ca_name: akira-ca
+        export_to_pfx: false
+        cn: Nexus server
+        hosts:
+          - nexus.akira.internal
+          - 192.168.100.200
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
+      - name: nexus-client.akira.internal
+        profile: client
+        ca_name: akira-ca
+        export_to_pfx: true
+        cn: Nexus client
+        hosts:
+          - nexus.akira.internal
+          - 192.168.100.200
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
+
+    nexus_data_dir: "{{ vgs[0].lvs[0].path }}"
+
+    nexus_admin_password: admin
+    nexus_anonymous_access: true
+    
+    httpd_setup_enable: true
+    httpd_server_name: nexus.akira.internal
+    httpd_copy_ssl_files: false
+    httpd_ssl_cert_file_location: "{{ self_signed_cert_dir }}nexus-server.akira.internal.pem"
+    httpd_ssl_cert_key_location: "{{ self_signed_cert_dir }}nexus-server.akira.internal-key.pem"
+
+    nexus_os_group: nexus
+    nexus_os_user: nexus
+
+    nexus_delete_default_repos: true
+    nexus_delete_default_blobstore: true
+    nexus_blobstores:
+    - name: apt
+      type: file
+      path: "{{ nexus_data_dir }}/blobs/apt"
+
+    nexus_blob_names:
+      apt:
+        blob: apt
+
+    nexus_config_apt: true
+    nexus_repos_apt_proxy: 
+    - name: ubuntu_bionic_archive
+      remote_url: http://archive.ubuntu.com/ubuntu/
+      distribution: bionic
+      flat: false
+    - name: ubuntu_bionic_security
+      remote_url: http://security.ubuntu.com/ubuntu
+      distribution: bionic
+      flat: false
