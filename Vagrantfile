@@ -4,6 +4,28 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-18.04"
 
+  config.vm.define "manager" do |manager|
+    hostname = "manager.akira.internal"
+
+    manager.vm.hostname = "#{hostname}"
+    manager.vm.network "private_network", ip: "192.168.100.200"
+
+    manager.vm.provider "virtualbox" do |vb|
+      vb.name = "#{hostname}"
+      vb.gui = false
+      vb.cpus = 1
+      vb.memory = 1024
+    end
+
+    manager.vm.provision "ansible_local" do |ansible|
+      ansible.become = true
+      ansible.playbook = "ansible/playbook.yml"
+      ansible.galaxy_role_file = "ansible/requirements.yml"
+      ansible.galaxy_roles_path = "/etc/ansible/roles"
+      ansible.galaxy_command = "sudo ansible-galaxy install --role-file=%{role_file} --roles-path=%{roles_path} --force"
+    end
+  end
+
   config.vm.define "vault" do |vault|
     hostname = "vault.akira.internal"
     dataDisk = "E:\\Virtual Machines Disks\\akira\\vault-datadisk001.vdi"
@@ -24,11 +46,11 @@ Vagrant.configure("2") do |config|
       vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 2, '--device', 0, '--type', 'hdd', '--hotpluggable', 'on', '--medium', "#{dataDisk}"]
     end
 
-    config.vm.provision "file", source: "./certs/vault-server.akira.internal-key.pem", destination: "/tmp/server.key"
-    config.vm.provision "file", source: "./certs/vault-server.akira.internal.pem", destination: "/tmp/server.pem"
-    config.vm.provision "file", source: "./certs/client.akira.internal-key.pem", destination: "/tmp/client.key"
-    config.vm.provision "file", source: "./certs/client.akira.internal.pem", destination: "/tmp/client.pem"
-    config.vm.provision "file", source: "./certs/akira-ca.pem", destination: "/tmp/ca.pem"
+    vault.vm.provision "file", source: "./certs/vault-server.akira.internal-key.pem", destination: "/tmp/server.key"
+    vault.vm.provision "file", source: "./certs/vault-server.akira.internal.pem", destination: "/tmp/server.pem"
+    vault.vm.provision "file", source: "./certs/vault-client.akira.internal-key.pem", destination: "/tmp/client.key"
+    vault.vm.provision "file", source: "./certs/vault-client.akira.internal.pem", destination: "/tmp/client.pem"
+    vault.vm.provision "file", source: "./certs/akira-ca.pem", destination: "/tmp/ca.pem"
 
     vault.vm.provision "shell", inline: <<-SHELL
       mkdir -p /srv/ssl/{private,certs}/vault /srv/ssl/ca
@@ -58,7 +80,7 @@ Vagrant.configure("2") do |config|
     dataDiskSize = 20480
 
     nexus.vm.hostname = "#{hostname}"
-    nexus.vm.network "private_network", ip: "192.168.100.200"
+    nexus.vm.network "private_network", ip: "192.168.100.202"
 
     nexus.vm.provider "virtualbox" do |vb|
       vb.name = "#{hostname}"
@@ -72,7 +94,19 @@ Vagrant.configure("2") do |config|
       vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 2, '--device', 0, '--type', 'hdd', '--hotpluggable', 'on', '--medium', "#{dataDisk}"]
     end
 
+    nexus.vm.provision "file", source: "./certs/nexus-server.akira.internal-key.pem", destination: "/tmp/server.key"
+    nexus.vm.provision "file", source: "./certs/nexus-server.akira.internal.pem", destination: "/tmp/server.pem"
+    nexus.vm.provision "file", source: "./certs/akira-ca.pem", destination: "/tmp/ca.pem"
+
     nexus.vm.provision "shell", inline: <<-SHELL
+      mkdir -p /srv/ssl/{private,certs}/nexus /srv/ssl/ca
+
+      mv /tmp/server.key /srv/ssl/private/nexus
+      mv /tmp/server.pem /srv/ssl/certs/nexus
+      mv /tmp/ca.pem /srv/ssl/ca
+
+      chmod 644 /srv/ssl/ca/ca.pem /srv/ssl/private/nexus/server.key /srv/ssl/certs/nexus/server.pem
+
       apt-get -qq update
       apt-get install -y openjdk-8-jre-headless python-pip apache2
       pip install jmespath
