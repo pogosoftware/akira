@@ -1,19 +1,10 @@
-- hosts: nexus
+- hosts: manager
   become: yes
   roles:
-    - pogosoftware.lvm
     - pogosoftware.self_signed_cert
-    - pogosoftware.nexus3_oss
   vars:
-    vgs:
-      - vg: data
-        pvs: /dev/sdb
-        lvs:
-          - lv: nexus
-            size: +100%VG
-            path: /var/lib/nexus
-
     self_signed_cert_dir: /vagrant/certs/
+
     self_signed_cert_ca_certs:
       - name: akira-ca
         cn: Akira CA
@@ -27,6 +18,36 @@
         trust_ca_cert: true
 
     self_signed_cert_certs:
+      - name: vault-server.akira.internal
+        profile: server
+        ca_name: akira-ca
+        export_to_pfx: false
+        cn: Vault server
+        hosts:
+          - vault.akira.internal
+          - 192.168.100.201
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
+      - name: vault-client.akira.internal
+        profile: client
+        ca_name: akira-ca
+        export_to_pfx: false
+        cn: vault client
+        hosts:
+          - vault.akira.internal
+          - 192.168.100.201
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
       - name: nexus-server.akira.internal
         profile: server
         ca_name: akira-ca
@@ -34,7 +55,7 @@
         cn: Nexus server
         hosts:
           - nexus.akira.internal
-          - 192.168.100.200
+          - 192.168.100.202
         key_algo: rsa
         key_size: 2048
         country: PL
@@ -42,14 +63,16 @@
         organisation: Pogosoftware
         organisation_unit: IT
         state: dolnoslaskie
-      - name: nexus-client.akira.internal
+      - name: admin.akira.internal
         profile: client
         ca_name: akira-ca
         export_to_pfx: true
-        cn: Nexus client
+        cn: Akira Admin
         hosts:
+          - vault.akira.internal
+          - 192.168.100.201
           - nexus.akira.internal
-          - 192.168.100.200
+          - 192.168.100.202
         key_algo: rsa
         key_size: 2048
         country: PL
@@ -57,6 +80,52 @@
         organisation: Pogosoftware
         organisation_unit: IT
         state: dolnoslaskie
+
+- hosts: vault
+  become: yes
+  roles:
+    - pogosoftware.lvm
+    - pogosoftware.vault
+  vars:
+    vgs:
+      - vg: data
+        pvs: /dev/sdb
+        lvs:
+          - lv: vault
+            size: +100%VG
+            path: /var/lib/vault
+
+    vault_key_shares: 1
+    vault_key_threshold: 1
+   
+    vault_tls_server_cert: /srv/ssl/certs/vault/server.pem
+    vault_tls_server_cert_key: /srv/ssl/private/vault/server.key
+    vault_tls_client_cert: /srv/ssl/certs/vault/client.pem
+    vault_tls_client_cert_key: /srv/ssl/private/vault/client.key
+    vault_tls_ca_cert: /srv/ssl/ca/ca.pem
+
+    vault_listener:
+      tcp:
+        address: 192.168.100.201
+        port: 443
+        tls_disable: false
+        tls_cert_file: "{{ vault_tls_server_cert }}"
+        tls_key_file: "{{ vault_tls_server_cert_key }}"
+        tls_client_ca_file: "{{ vault_tls_ca_cert }}"
+
+- hosts: nexus
+  become: yes
+  roles:
+    - pogosoftware.lvm
+    - pogosoftware.nexus3_oss
+  vars:
+    vgs:
+      - vg: data
+        pvs: /dev/sdb
+        lvs:
+          - lv: nexus
+            size: +100%VG
+            path: /var/lib/nexus
 
     nexus_data_dir: "{{ vgs[0].lvs[0].path }}"
 
@@ -66,8 +135,8 @@
     httpd_setup_enable: true
     httpd_server_name: nexus.akira.internal
     httpd_copy_ssl_files: false
-    httpd_ssl_cert_file_location: "{{ self_signed_cert_dir }}nexus-server.akira.internal.pem"
-    httpd_ssl_cert_key_location: "{{ self_signed_cert_dir }}nexus-server.akira.internal-key.pem"
+    httpd_ssl_cert_file_location: "/srv/ssl/certs/nexus/server.pem"
+    httpd_ssl_cert_key_location: "/srv/ssl/private/nexus/server.key"
 
     nexus_os_group: nexus
     nexus_os_user: nexus
