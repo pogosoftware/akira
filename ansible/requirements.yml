@@ -4,3 +4,4 @@
 - src: pogosoftware.self_signed_cert
 - src: pogosoftware.nexus3_oss
 - src: pogosoftware.vault
+- src: pogosoftware.etcd

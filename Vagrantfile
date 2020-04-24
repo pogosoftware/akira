@@ -4,6 +4,55 @@
 Vagrant.configure("2") do |config|
   config.vm.box = "bento/ubuntu-18.04"
 
+  (0..2).each do |index|
+    config.vm.define "controller#{index}" do |controller|
+      hostname = "controller#{index}.akira.internal"
+      dataDisk = "E:\\Virtual Machines Disks\\akira\\controller#{index}-datadisk001.vdi"
+      dataDiskSize = 10240
+
+      controller.vm.hostname = "#{hostname}"
+      controller.vm.network "private_network", ip: "10.240.0.1#{index}", virtualbox__intnet: "kubernetes"
+  
+      controller.vm.provider "virtualbox" do |vb|
+        vb.name = "#{hostname}"
+        vb.gui = false
+        vb.cpus = 1
+        vb.memory = 1024
+
+        unless File.exist?("#{dataDisk}")
+          vb.customize ['createhd', '--filename', "#{dataDisk}", '--variant', 'Fixed', '--size', "#{dataDiskSize}"]
+        end
+        vb.customize ['storageattach', :id, '--storagectl', 'SATA Controller', '--port', 2, '--device', 0, '--type', 'hdd', '--hotpluggable', 'on', '--medium', "#{dataDisk}"]
+      end
+        
+      controller.vm.provision "file", source: "./certs/controller.akira.internal-key.pem", destination: "/tmp/etcd.key"
+      controller.vm.provision "file", source: "./certs/controller.akira.internal.pem", destination: "/tmp/etcd.pem"
+      controller.vm.provision "file", source: "./certs/akira-ca.pem", destination: "/tmp/ca.pem"
+  
+      controller.vm.provision "shell", inline: <<-SHELL
+        mkdir -p /srv/ssl/{private,certs}/etcd /srv/ssl/ca
+  
+        mv /tmp/etcd.key /srv/ssl/private/etcd
+        mv /tmp/etcd.pem /srv/ssl/certs/etcd
+        mv /tmp/ca.pem /srv/ssl/ca
+  
+        chmod 644 /srv/ssl/ca/ca.pem /srv/ssl/private/etcd/etcd.key /srv/ssl/certs/etcd/etcd.pem
+  
+        apt-get -qq update
+      SHELL
+  
+      controller.vm.provision "ansible_local" do |ansible|
+        ansible.become = true
+        ansible.playbook = "ansible/playbook.yml"
+        ansible.galaxy_role_file = "ansible/requirements.yml"
+        ansible.galaxy_roles_path = "/etc/ansible/roles"
+        ansible.galaxy_command = "sudo ansible-galaxy install --role-file=%{role_file} --roles-path=%{roles_path} --force"
+      end
+    end
+  end
+
+  
+
   config.vm.define "manager" do |manager|
     hostname = "manager.akira.internal"
 

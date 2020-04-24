@@ -1,3 +1,22 @@
+- hosts: controller*
+  become: yes
+  roles:
+    - pogosoftware.lvm
+    - pogosoftware.etcd
+  vars:
+    vgs:
+      - vg: data
+        pvs: /dev/sdb
+        lvs:
+          - lv: etcd
+            size: +100%VG
+            path: /var/lib/etcd
+
+    etcd_initial_cluster:
+      - controller0=https://10.240.0.10:2380
+      - controller1=https://10.240.0.11:2380
+      - controller2=https://10.240.0.12:2380
+
 - hosts: manager
   become: yes
   roles:
@@ -56,6 +75,25 @@
         hosts:
           - nexus.akira.internal
           - 192.168.100.202
+        key_algo: rsa
+        key_size: 2048
+        country: PL
+        location: Wrocław
+        organisation: Pogosoftware
+        organisation_unit: IT
+        state: dolnoslaskie
+      - name: controller.akira.internal
+        profile: server
+        ca_name: akira-ca
+        export_to_pfx: false
+        cn: etcd server
+        hosts:
+          - controller0.akira.internal
+          - 10.240.0.10
+          - controller1.akira.internal
+          - 10.240.0.11
+          - controller2.akira.internal
+          - 10.240.0.12
         key_algo: rsa
         key_size: 2048
         country: PL
